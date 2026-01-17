@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    /* ===========================
+       USERS
+    =========================== */
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && isOwner(userId);
+    }
+
+    /* ===========================
+       BRANDS (READ ONLY)
+    =========================== */
+    match /brands/{brandId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    /* ===========================
+       TRAININGS (READ ONLY)
+    =========================== */
+    match /trainings/{trainingId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    /* ===========================
+       QUIZZES (READ ONLY)
+    =========================== */
+    match /quizzes/{quizId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    /* ===========================
+       QUIZ QUESTIONS (READ ONLY)
+    =========================== */
+    match /quizQuestions/{questionId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    /* ===========================
+       QUIZ ANSWERS (READ ONLY)
+       Note: isCorrect field exists but security rules don't filter fields.
+       The Cloud Function handles scoring - frontend just displays options.
+    =========================== */
+    match /quizAnswers/{answerId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    /* ===========================
+       USER PROGRESS
+    =========================== */
+    match /progress/{progressId} {
+      allow read: if isSignedIn() && isOwner(resource.data.userId);
+      allow create, update: if isSignedIn()
+        && isOwner(request.resource.data.userId);
+      allow delete: if false;
+    }
+  }
+}
