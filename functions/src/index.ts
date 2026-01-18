@@ -108,3 +108,44 @@ export const submitQuiz = onCall(async (request) => {
 
     return { score, passed };
 });
+
+/**
+ * setAdminClaim - Set admin custom claim on a user
+ * 
+ * Only callable by existing admins
+ * Accepts: { email: string, isAdmin: boolean }
+ */
+export const setAdminClaim = onCall(async (request) => {
+    // Auth check
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "User must be logged in.");
+    }
+
+    // Check if caller is admin
+    if (request.auth.token.admin !== true) {
+        throw new HttpsError("permission-denied", "Only admins can set admin claims.");
+    }
+
+    const { email, isAdmin } = request.data;
+
+    if (!email || typeof isAdmin !== "boolean") {
+        throw new HttpsError("invalid-argument", "Email and isAdmin (boolean) required.");
+    }
+
+    try {
+        // Get user by email
+        const userRecord = await admin.auth().getUserByEmail(email);
+
+        // Set custom claim
+        await admin.auth().setCustomUserClaims(userRecord.uid, {
+            admin: isAdmin,
+        });
+
+        logger.info("Admin claim updated", { email, isAdmin, by: request.auth.uid });
+
+        return { success: true, message: `Admin claim ${isAdmin ? "granted" : "revoked"} for ${email}` };
+    } catch (error) {
+        logger.error("Error setting admin claim", { error, email });
+        throw new HttpsError("internal", "Failed to set admin claim.");
+    }
+});

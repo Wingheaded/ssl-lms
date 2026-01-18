@@ -1,0 +1,30 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.admin == true;
+    }
+    
+    // Training media files (videos, audios, PDFs)
+    match /trainings/{trainingId}/{fileName} {
+      // Anyone authenticated can read (view content)
+      allow read: if isAuthenticated();
+      
+      // Only admins can upload/modify/delete
+      allow write: if isAdmin();
+    }
+    
+    // Brand logos and images
+    match /brands/{brandId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}

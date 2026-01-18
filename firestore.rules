@@ -11,27 +11,32 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
     /* ===========================
        USERS
     =========================== */
     match /users/{userId} {
-      allow read, write: if isSignedIn() && isOwner(userId);
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow write: if isSignedIn() && isOwner(userId);
     }
 
     /* ===========================
-       BRANDS (READ ONLY)
+       BRANDS
     =========================== */
     match /brands/{brandId} {
       allow read: if isSignedIn();
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
     /* ===========================
-       TRAININGS (READ ONLY)
+       TRAININGS
     =========================== */
     match /trainings/{trainingId} {
       allow read: if isSignedIn();
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
     /* ===========================
