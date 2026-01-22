@@ -23,59 +23,103 @@ export const submitQuiz = onCall(async (request) => {
     }
 
     const userId = request.auth.uid;
-    const { trainingId, answers } = request.data;
+    const { trainingId, sessionId, answers } = request.data;
 
     if (!trainingId || !answers || typeof answers !== "object") {
         throw new HttpsError("invalid-argument", "Invalid payload: trainingId and answers required.");
     }
 
-    // Find quiz for this training
-    const quizSnap = await db
-        .collection("quizzes")
-        .where("trainingId", "==", trainingId)
-        .limit(1)
-        .get();
-
-    if (quizSnap.empty) {
-        throw new HttpsError("not-found", "Quiz not found for this training.");
-    }
-
-    const quizId = quizSnap.docs[0].id;
-
-    // Get all questions for this quiz
-    const questionsSnap = await db
-        .collection("quizQuestions")
-        .where("quizId", "==", quizId)
-        .get();
-
-    if (questionsSnap.empty) {
-        throw new HttpsError("not-found", "No questions found for this quiz.");
-    }
-
     let correctCount = 0;
-    const totalQuestions = questionsSnap.size;
+    let totalQuestions = 0;
 
-    // Validate each question's answers
-    for (const questionDoc of questionsSnap.docs) {
-        const questionId = questionDoc.id;
+    // Check if this is an AI-generated quiz (has sessionId)
+    if (sessionId) {
+        // AI-generated quiz: fetch answers from Firestore cache
+        const cacheDoc = await db.collection("quizSessions").doc(sessionId).get();
 
-        // Get correct answers for this question from quizAnswers collection
-        const correctAnswersSnap = await db
-            .collection("quizAnswers")
-            .where("questionId", "==", questionId)
-            .where("isCorrect", "==", true)
+        if (!cacheDoc.exists) {
+            throw new HttpsError("not-found", "Quiz session expired or not found. Please start a new quiz.");
+        }
+
+        const cacheData = cacheDoc.data()!;
+
+        // Verify session belongs to this user and training
+        if (cacheData.userId !== userId || cacheData.trainingId !== trainingId) {
+            throw new HttpsError("permission-denied", "Invalid quiz session.");
+        }
+
+        // Check expiration
+        const expiresAt = cacheData.expiresAt?.toDate?.() || new Date(cacheData.expiresAt);
+        if (Date.now() > expiresAt.getTime()) {
+            await db.collection("quizSessions").doc(sessionId).delete();
+            throw new HttpsError("deadline-exceeded", "Quiz session expired. Please start a new quiz.");
+        }
+
+        const correctAnswers = cacheData.answers;
+        totalQuestions = Object.keys(correctAnswers).length;
+
+        // Validate each question (answers is { questionIndex: selectedIndices[] })
+        for (const [questionIndex, correctIndices] of Object.entries(correctAnswers)) {
+            const userSelectedIndices = (answers[questionIndex] || []).sort();
+            const expectedIndices = (correctIndices as number[]).sort();
+
+            // All-or-nothing comparison
+            const isCorrect =
+                userSelectedIndices.length === expectedIndices.length &&
+                userSelectedIndices.every((idx: number, i: number) => idx === expectedIndices[i]);
+
+            if (isCorrect) {
+                correctCount++;
+            }
+        }
+
+        // Clean up cache after validation
+        await db.collection("quizSessions").doc(sessionId).delete();
+
+    } else {
+        // Legacy Firestore-based quiz
+        const quizSnap = await db
+            .collection("quizzes")
+            .where("trainingId", "==", trainingId)
+            .limit(1)
             .get();
 
-        const correctAnswerIds = correctAnswersSnap.docs.map(doc => doc.id).sort();
-        const userAnswerIds = (answers[questionId] || []).sort();
+        if (quizSnap.empty) {
+            throw new HttpsError("not-found", "Quiz not found for this training.");
+        }
 
-        // Compare arrays (order-independent exact match)
-        const isCorrect =
-            correctAnswerIds.length === userAnswerIds.length &&
-            correctAnswerIds.every((id, index) => id === userAnswerIds[index]);
+        const quizId = quizSnap.docs[0].id;
 
-        if (isCorrect) {
-            correctCount++;
+        const questionsSnap = await db
+            .collection("quizQuestions")
+            .where("quizId", "==", quizId)
+            .get();
+
+        if (questionsSnap.empty) {
+            throw new HttpsError("not-found", "No questions found for this quiz.");
+        }
+
+        totalQuestions = questionsSnap.size;
+
+        for (const questionDoc of questionsSnap.docs) {
+            const questionId = questionDoc.id;
+
+            const correctAnswersSnap = await db
+                .collection("quizAnswers")
+                .where("questionId", "==", questionId)
+                .where("isCorrect", "==", true)
+                .get();
+
+            const correctAnswerIds = correctAnswersSnap.docs.map(doc => doc.id).sort();
+            const userAnswerIds = (answers[questionId] || []).sort();
+
+            const isCorrect =
+                correctAnswerIds.length === userAnswerIds.length &&
+                correctAnswerIds.every((id, index) => id === userAnswerIds[index]);
+
+            if (isCorrect) {
+                correctCount++;
+            }
         }
     }
 
@@ -99,7 +143,7 @@ export const submitQuiz = onCall(async (request) => {
     logger.info("Quiz submitted", {
         userId,
         trainingId,
-        quizId,
+        sessionId: sessionId || "legacy",
         score,
         passed,
         correctCount,
@@ -108,6 +152,7 @@ export const submitQuiz = onCall(async (request) => {
 
     return { score, passed };
 });
+
 
 /**
  * setAdminClaim - Set admin custom claim on a user
@@ -149,3 +194,7 @@ export const setAdminClaim = onCall(async (request) => {
         throw new HttpsError("internal", "Failed to set admin claim.");
     }
 });
+
+export { extractTranscript } from "./quiz/extractTranscript";
+export { generateQuiz } from "./quiz/generateQuiz";
+
