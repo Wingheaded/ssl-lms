@@ -21,6 +21,14 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow write: if isSignedIn() && isOwner(userId);
+
+      match /brandVisits/{visitId} {
+        allow read, write: if isSignedIn() && (isOwner(userId) || isAdmin());
+      }
+
+      match /trainingVisits/{visitId} {
+        allow read, write: if isSignedIn() && (isOwner(userId) || isAdmin());
+      }
     }
 
     /* ===========================
@@ -69,7 +77,7 @@ service cloud.firestore {
        USER PROGRESS
     =========================== */
     match /progress/{progressId} {
-      allow read: if isSignedIn() && isOwner(resource.data.userId);
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
       allow create, update: if isSignedIn()
         && isOwner(request.resource.data.userId);
       allow delete: if false;

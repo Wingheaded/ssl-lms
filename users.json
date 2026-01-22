@@ -1,0 +1,56 @@
+{"users": [
+{
+  "localId": "UM1iYG5Q6iZcLwSsvp9S0Icb1Fk2",
+  "email": "jose.antonio@skinselflove.com.pt",
+  "emailVerified": true,
+  "displayName": "José António",
+  "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocKDA3Vdv0hjSlMV1tcRCy-osRzvdc0oqwY0SoSc08HOI56olg=s96-c",
+  "lastSignedInAt": "1768752922755",
+  "createdAt": "1768674412769",
+  "customAttributes": "{\"admin\":true}",
+  "providerUserInfo": [
+    {
+      "providerId": "google.com",
+      "rawId": "115491826003774625381",
+      "email": "jose.antonio@skinselflove.com.pt",
+      "displayName": "José António",
+      "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocKDA3Vdv0hjSlMV1tcRCy-osRzvdc0oqwY0SoSc08HOI56olg=s96-c"
+    }
+  ]
+},
+{
+  "localId": "hyGQPlJukuR8AXIiaHeDpZG3kVF2",
+  "email": "wingheaded@gmail.com",
+  "emailVerified": true,
+  "displayName": "Wingheaded",
+  "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocL8x_KsQygT6A0l7HcR6_c4sOxq52TiYjg3iCdqhEAXb5N56w=s96-c",
+  "lastSignedInAt": "1768752915632",
+  "createdAt": "1768752915632",
+  "providerUserInfo": [
+    {
+      "providerId": "google.com",
+      "rawId": "103536478594379312048",
+      "email": "wingheaded@gmail.com",
+      "displayName": "Wingheaded",
+      "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocL8x_KsQygT6A0l7HcR6_c4sOxq52TiYjg3iCdqhEAXb5N56w=s96-c"
+    }
+  ]
+},
+{
+  "localId": "zh5oNrIckmMYAv5p75dFzrT1ELg1",
+  "email": "jose.antonio.luanda@gmail.com",
+  "emailVerified": true,
+  "displayName": "José António Gomes",
+  "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocI3rFAo4jd2F7ZacgQE-qk0PmXKEmL-FeaQZpULa4AaNtMDagxQ=s96-c",
+  "lastSignedInAt": "1768748540039",
+  "createdAt": "1768747330465",
+  "providerUserInfo": [
+    {
+      "providerId": "google.com",
+      "rawId": "100670121225306142401",
+      "email": "jose.antonio.luanda@gmail.com",
+      "displayName": "José António Gomes",
+      "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocI3rFAo4jd2F7ZacgQE-qk0PmXKEmL-FeaQZpULa4AaNtMDagxQ=s96-c"
+    }
+  ]
+}]}
