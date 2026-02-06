@@ -125,7 +125,7 @@ export const submitQuiz = onCall(async (request) => {
 
     // Calculate score
     const score = Math.round((correctCount / totalQuestions) * 100);
-    const passed = score >= 90;
+    const passed = score >= 80;
 
     // Update progress document
     const progressDocId = `${userId}_${trainingId}`;
@@ -151,6 +151,121 @@ export const submitQuiz = onCall(async (request) => {
     });
 
     return { score, passed };
+});
+
+/**
+ * checkAnswer - Callable Cloud Function for per-question feedback
+ *
+ * AI quizzes: { trainingId, sessionId, questionIndex, selectedIndices: number[] }
+ * Legacy quizzes: { trainingId, questionId, selectedAnswerIds: string[] }
+ *
+ * Returns: { isCorrect, correctIndices | correctAnswerIds }
+ */
+export const checkAnswer = onCall(async (request) => {
+    try {
+        if (!request.auth) {
+            throw new HttpsError("unauthenticated", "User must be logged in.");
+        }
+
+        const userId = request.auth.uid;
+        const {
+            trainingId,
+            sessionId,
+            questionIndex,
+            selectedIndices,
+            questionId,
+            selectedAnswerIds
+        } = request.data || {};
+
+        if (!trainingId) {
+            throw new HttpsError("invalid-argument", "trainingId is required.");
+        }
+
+        const isAiQuiz = !!sessionId;
+
+        if (isAiQuiz) {
+            if (typeof questionIndex !== "number" || !Array.isArray(selectedIndices)) {
+                throw new HttpsError("invalid-argument", "questionIndex and selectedIndices are required for AI quizzes.");
+            }
+
+            const cacheDoc = await db.collection("quizSessions").doc(sessionId).get();
+
+            if (!cacheDoc.exists) {
+                throw new HttpsError("not-found", "Quiz session expired or not found.");
+            }
+
+            const cacheData = cacheDoc.data()!;
+
+            if (cacheData.userId !== userId || cacheData.trainingId !== trainingId) {
+                throw new HttpsError("permission-denied", "Invalid quiz session.");
+            }
+
+            const expiresAt = cacheData.expiresAt?.toDate?.() || new Date(cacheData.expiresAt);
+            if (Date.now() > expiresAt.getTime()) {
+                await db.collection("quizSessions").doc(sessionId).delete();
+                throw new HttpsError("deadline-exceeded", "Quiz session expired. Please start a new quiz.");
+            }
+
+            const correctAnswers = cacheData.answers || {};
+            const correctIndices = (correctAnswers[questionIndex] || []) as number[];
+
+            const userSelected = [...selectedIndices].sort();
+            const expected = [...correctIndices].sort();
+
+            const isCorrect =
+                userSelected.length === expected.length &&
+                userSelected.every((idx: number, i: number) => idx === expected[i]);
+
+            return { isCorrect, correctIndices };
+        }
+
+        if (!questionId || !Array.isArray(selectedAnswerIds)) {
+            throw new HttpsError("invalid-argument", "questionId and selectedAnswerIds are required for legacy quizzes.");
+        }
+
+        const quizSnap = await db
+            .collection("quizzes")
+            .where("trainingId", "==", trainingId)
+            .limit(1)
+            .get();
+
+        if (quizSnap.empty) {
+            throw new HttpsError("not-found", "Quiz not found for this training.");
+        }
+
+        const quizId = quizSnap.docs[0].id;
+        const questionDoc = await db.collection("quizQuestions").doc(questionId).get();
+
+        if (!questionDoc.exists) {
+            throw new HttpsError("not-found", "Question not found.");
+        }
+
+        const questionData = questionDoc.data() as { quizId?: string };
+        if (questionData.quizId !== quizId) {
+            throw new HttpsError("permission-denied", "Question does not belong to this training.");
+        }
+
+        const correctAnswersSnap = await db
+            .collection("quizAnswers")
+            .where("questionId", "==", questionId)
+            .where("isCorrect", "==", true)
+            .get();
+
+        const correctAnswerIds = correctAnswersSnap.docs.map(doc => doc.id).sort();
+        const userAnswerIds = [...selectedAnswerIds].sort();
+
+        const isCorrect =
+            correctAnswerIds.length === userAnswerIds.length &&
+            correctAnswerIds.every((id, index) => id === userAnswerIds[index]);
+
+        return { isCorrect, correctAnswerIds };
+    } catch (error: any) {
+        logger.error("checkAnswer error", error);
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError("internal", error?.message || "Unknown error");
+    }
 });
 
 
@@ -197,4 +312,3 @@ export const setAdminClaim = onCall(async (request) => {
 
 export { extractTranscript } from "./quiz/extractTranscript";
 export { generateQuiz } from "./quiz/generateQuiz";
-
