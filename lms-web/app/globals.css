@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* Skin Self Love Design System */
+:root {
+  /* Signature Colors */
+  --sage: #AAB6A2;
+  --cream: #F9F7F2;
+  --taupe: #D9CEC5;
+  --charcoal: #4A4A4A;
+  
+  /* Semantic mapping */
+  --background: var(--cream);
+  --foreground: var(--charcoal);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sage: var(--sage);
+  --color-cream: var(--cream);
+  --color-taupe: var(--taupe);
+  --color-charcoal: var(--charcoal);
+  --font-sans: 'Lato', sans-serif;
+  --font-display: 'Playfair Display', serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Lato', sans-serif;
+}
+
+/* Typography */
+.font-display {
+  font-family: 'Playfair Display', serif;
+}
+
+/* Custom button styles */
+.btn-primary {
+  @apply px-6 py-3 bg-sage text-white rounded-lg font-medium transition-colors hover:bg-sage/90 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply px-6 py-3 bg-white border border-sage text-sage rounded-lg font-medium transition-colors hover:bg-sage/5;
+}
+
+/* Cards */
+.card {
+  @apply bg-white rounded-xl border border-taupe/30 p-4 transition-shadow hover:shadow-md;
+}
+
+/* Status badges */
+.badge {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
+}
+.badge-not-started { @apply bg-gray-100 text-gray-600; }
+.badge-in-progress { @apply bg-yellow-100 text-yellow-700; }
+.badge-failed { @apply bg-red-100 text-red-700; }
+.badge-passed { @apply bg-green-100 text-green-700; }
