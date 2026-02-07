@@ -122,6 +122,15 @@ const ALLOWED_DOMAIN = "skinselflove.com";
 
 ## Deployment
 
+### Live Application
+🚀 **[https://lms-a762e.web.app](https://lms-a762e.web.app)**
+
+### CI/CD Pipeline
+Automatic deployment is configured via GitHub Actions:
+- **Push to `main`**: Deploys to production specific version.
+- **Pull Requests**: Creates a preview channel for testing.
+
+### Manual Deployment
 ```bash
 # Deploy everything
 firebase deploy

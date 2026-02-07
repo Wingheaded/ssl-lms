@@ -26,15 +26,15 @@
       ]
     }
   ],
-  "apphosting": {
-    "backendId": "skinselflove-lms",
-    "rootDir": "lms-web",
+  "hosting": {
+    "source": "lms-web",
     "ignore": [
-      "node_modules",
-      ".git",
-      "firebase-debug.log",
-      "firebase-debug.*.log",
-      "functions"
-    ]
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "frameworksBackend": {
+      "region": "us-central1"
+    }
   }
 }
