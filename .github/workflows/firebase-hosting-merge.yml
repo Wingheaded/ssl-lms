@@ -7,10 +7,10 @@ on:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
+    env:
+      FIREBASE_CLI_EXPERIMENTS: webframeworks
     steps:
       - uses: actions/checkout@v4
-      - name: Debug - List files
-        run: ls -R
       - name: Install Dependencies
         run: cd lms-web && npm ci
       - name: Build
