@@ -46,7 +46,7 @@ body {
 
 /* Cards */
 .card {
-  @apply bg-white rounded-xl border border-taupe/30 p-4 transition-shadow hover:shadow-md;
+  @apply bg-white rounded-xl border border-taupe/30 p-4 transition-shadow hover:shadow-md cursor-pointer;
 }
 
 /* Status badges */
