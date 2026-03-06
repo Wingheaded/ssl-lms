@@ -156,7 +156,7 @@ export default function BrandsPage() {
                             <button
                                 key={brand.id}
                                 onClick={() => handleBrandClick(brand.id)}
-                                className="card text-left transition-all hover:border-sage relative overflow-hidden"
+                                className="card text-left transition-all hover:border-sage relative overflow-hidden cursor-pointer"
                             >
                                 <div className="flex justify-between items-start">
                                     <h2 className="font-display text-xl text-charcoal">
