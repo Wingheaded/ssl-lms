@@ -124,7 +124,7 @@ export default function TrainingsPage() {
 
         const created = training.createdAt instanceof Date
             ? training.createdAt
-            : (training.createdAt as any).toDate();
+            : (training.createdAt as { toDate: () => Date }).toDate();
 
         const lastVisited = trainingVisits.get(training.id);
 
@@ -224,6 +224,7 @@ export default function TrainingsPage() {
                                                         {(types.has("video") || types.has("youtube")) && <span title="Vídeo">🎬</span>}
                                                         {types.has("audio") && <span title="Áudio">🎧</span>}
                                                         {types.has("pdf") && <span title="PDF">📄</span>}
+                                                        {types.has("image") && <span title="Imagem">🖼️</span>}
                                                     </>
                                                 );
                                             })()}

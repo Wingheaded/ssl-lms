@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
@@ -216,6 +217,7 @@ export default function TrainingDetailPage() {
                     // Split remaining files by type
                     const extraAudios = remainingFiles.filter(f => f.type === "audio");
                     const supportPdfs = remainingFiles.filter(f => f.type === "pdf");
+                    const supportImages = remainingFiles.filter(f => f.type === "image");
 
                     // Helper to get embed URL from regular YouTube URL if needed
                     // (But ideally we stored the watch URL, so we can convert it or just rely on getEmbedUrl helper if it handles it)
@@ -340,6 +342,42 @@ export default function TrainingDetailPage() {
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                            )}
+
+                            {supportImages.length > 0 && (
+                                <div className="bg-white rounded-xl border border-taupe/30 p-6 mb-8 shadow-sm">
+                                    <h3 className="text-lg font-display text-charcoal mb-4 flex items-center gap-2">
+                                        <span className="text-sage">🖼️</span>
+                                        Imagens
+                                    </h3>
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        {supportImages.map((file) => (
+                                            <a
+                                                key={file.id}
+                                                href={file.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="group overflow-hidden rounded-xl border border-taupe/20 bg-cream/30 shadow-sm transition-all hover:border-sage/40 hover:shadow-md"
+                                            >
+                                                <div className="relative h-56 w-full">
+                                                    <Image
+                                                        src={file.url}
+                                                        alt={file.title || file.fileName}
+                                                        fill
+                                                        unoptimized
+                                                        sizes="(min-width: 640px) 50vw, 100vw"
+                                                        className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                                                    />
+                                                </div>
+                                                <div className="border-t border-taupe/10 px-4 py-3">
+                                                    <p className="font-medium text-charcoal group-hover:text-sage-dark transition-colors">
+                                                        {file.title || file.fileName}
+                                                    </p>
+                                                </div>
+                                            </a>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 

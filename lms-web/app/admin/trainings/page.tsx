@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-context";
@@ -11,9 +10,7 @@ import { Training, Brand } from "@/lib/types";
 
 export default function AdminTrainingsPage() {
     const { user, loading, isAdmin } = useAuth();
-    const router = useRouter();
     const [trainings, setTrainings] = useState<(Training & { brandName: string })[]>([]);
-    const [brands, setBrands] = useState<Brand[]>([]);
     const [loadingData, setLoadingData] = useState(true);
 
 
@@ -29,7 +26,6 @@ export default function AdminTrainingsPage() {
                     id: doc.id,
                     ...doc.data()
                 })) as Brand[];
-                setBrands(brandsData);
 
                 // Fetch all trainings
                 const trainingsSnap = await getDocs(
@@ -88,6 +84,7 @@ export default function AdminTrainingsPage() {
                 {types.has("youtube") && <span title="YouTube">▶️</span>}
                 {types.has("audio") && <span title="Áudio">🎧</span>}
                 {types.has("pdf") && <span title="PDF">📄</span>}
+                {types.has("image") && <span title="Imagem">🖼️</span>}
             </div>
         );
     };

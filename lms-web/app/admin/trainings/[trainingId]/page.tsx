@@ -11,6 +11,8 @@ import { httpsCallable } from "firebase/functions";
 import AppLayout from "@/components/AppLayout";
 import { Training, Brand, MediaFile } from "@/lib/types";
 
+type UploadType = "video" | "audio" | "pdf" | "youtube" | "image";
+
 export default function EditTrainingPage() {
     const { user, loading, isAdmin } = useAuth();
     const router = useRouter();
@@ -34,7 +36,7 @@ export default function EditTrainingPage() {
     const [description, setDescription] = useState("");
     const [brandId, setBrandId] = useState("");
     const [isActive, setIsActive] = useState(true);
-    const [selectedType, setSelectedType] = useState<"video" | "audio" | "pdf" | "youtube">("video");
+    const [selectedType, setSelectedType] = useState<UploadType>("video");
     const [youtubeUrl, setYoutubeUrl] = useState("");
     const [transcript, setTranscript] = useState("");
     const [extracting, setExtracting] = useState(false);
@@ -155,7 +157,7 @@ export default function EditTrainingPage() {
         try {
             const extractFn = httpsCallable(functions, "extractTranscript");
             const result = await extractFn({ trainingId });
-            const { success, transcriptLength } = result.data as any;
+            const { success, transcriptLength } = result.data as { success?: boolean; transcriptLength?: number };
 
             if (success) {
                 // Fetch updated doc to get the transcript
@@ -167,9 +169,10 @@ export default function EditTrainingPage() {
                     setMessage({ type: "success", text: `Transcrição extraída com sucesso (${transcriptLength} caracteres)!` });
                 }
             }
-        } catch (err: any) {
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "Tente novamente";
             console.error("Extraction error:", err);
-            setMessage({ type: "error", text: "Erro ao extrair transcrição: " + (err.message || "Tente novamente") });
+            setMessage({ type: "error", text: "Erro ao extrair transcrição: " + errorMessage });
         } finally {
             setExtracting(false);
         }
@@ -223,6 +226,7 @@ export default function EditTrainingPage() {
             video: ["video/mp4", "video/webm", "video/quicktime"],
             audio: ["audio/mpeg", "audio/wav", "audio/mp3", "audio/x-m4a"],
             pdf: ["application/pdf"],
+            image: ["image/jpeg", "image/png", "image/webp", "image/gif", "image/jpg"],
         };
 
         if (!allowedTypes[selectedType].includes(file.type)) {
@@ -356,9 +360,10 @@ export default function EditTrainingPage() {
 
                 try {
                     await deleteObject(storageRef);
-                } catch (storageErr: any) {
+                } catch (storageErr) {
+                    const storageError = storageErr as { code?: string };
                     // Only ignore "Object Not Found" (404) errors
-                    if (storageErr.code === 'storage/object-not-found') {
+                    if (storageError.code === 'storage/object-not-found') {
                         console.warn("File was already deleted from storage (404). Proceeding to remove record.");
                     } else {
                         // Rethrow other errors (permission, network, etc) to prevent data inconsistency
@@ -380,9 +385,10 @@ export default function EditTrainingPage() {
             });
 
             setMessage({ type: "success", text: "Ficheiro apagado com sucesso e espaço libertado!" });
-        } catch (err: any) {
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "Erro ao apagar ficheiro";
             console.error("Delete error:", err);
-            setMessage({ type: "error", text: err.message || "Erro ao apagar ficheiro" });
+            setMessage({ type: "error", text: errorMessage });
         } finally {
             setDeleting(null);
         }
@@ -394,6 +400,7 @@ export default function EditTrainingPage() {
             case "audio": return "🎧";
             case "pdf": return "📄";
             case "youtube": return "▶️";
+            case "image": return "🖼️";
             default: return "📁";
         }
     };
@@ -419,6 +426,13 @@ export default function EditTrainingPage() {
     }
 
     const mediaFiles = training.mediaFiles || [];
+    const uploadTypeOptions: { value: UploadType; label: string; accept: string | null }[] = [
+        { value: "video", label: "🎬 Vídeo", accept: ".mp4,.webm,.mov" },
+        { value: "audio", label: "🎧 Áudio", accept: ".mp3,.wav,.m4a" },
+        { value: "pdf", label: "📄 PDF", accept: ".pdf" },
+        { value: "image", label: "🖼️ Imagem", accept: ".jpg,.jpeg,.png,.webp,.gif" },
+        { value: "youtube", label: "▶️ YouTube", accept: null },
+    ];
 
     return (
         <AppLayout>
@@ -603,16 +617,11 @@ export default function EditTrainingPage() {
 
                         {/* File Type Selection */}
                         <div className="flex gap-2 mb-4">
-                            {[
-                                { value: "video", label: "🎬 Vídeo", accept: ".mp4,.webm,.mov" },
-                                { value: "audio", label: "🎧 Áudio", accept: ".mp3,.wav,.m4a" },
-                                { value: "pdf", label: "📄 PDF", accept: ".pdf" },
-                                { value: "youtube", label: "▶️ YouTube", accept: null },
-                            ].map((type) => (
+                            {uploadTypeOptions.map((type) => (
                                 <button
                                     key={type.value}
                                     type="button"
-                                    onClick={() => setSelectedType(type.value as any)}
+                                    onClick={() => setSelectedType(type.value)}
                                     className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${selectedType === type.value ? "bg-amber-100 border-amber-300 text-amber-800" : "bg-white border-gray-200 text-gray-600 hover:border-amber-200"}`}
                                 >
                                     {type.label}
@@ -642,7 +651,7 @@ export default function EditTrainingPage() {
                                         </button>
                                     </div>
                                     <p className="text-xs text-gray-400 mt-1">
-                                        Copie o link diretamento do browser ou do botão 'Partilhar' do YouTube.
+                                        Copie o link diretamento do browser ou do botão &apos;Partilhar&apos; do YouTube.
                                     </p>
                                 </div>
                             </div>
@@ -654,7 +663,8 @@ export default function EditTrainingPage() {
                                     onChange={handleFileUpload}
                                     accept={
                                         selectedType === "video" ? ".mp4,.webm,.mov" :
-                                            selectedType === "audio" ? ".mp3,.wav,.m4a" : ".pdf"
+                                            selectedType === "audio" ? ".mp3,.wav,.m4a" :
+                                                selectedType === "image" ? ".jpg,.jpeg,.png,.webp,.gif" : ".pdf"
                                     }
                                     className="hidden"
                                 />
@@ -677,7 +687,13 @@ export default function EditTrainingPage() {
                                         </div>
                                     ) : (
                                         <span>
-                                            Clique para adicionar {selectedType === "video" ? "vídeo" : selectedType === "audio" ? "áudio" : "PDF"}
+                                            Clique para adicionar {selectedType === "video"
+                                                ? "vídeo"
+                                                : selectedType === "audio"
+                                                    ? "áudio"
+                                                    : selectedType === "image"
+                                                        ? "imagem"
+                                                        : "PDF"}
                                         </span>
                                     )}
                                 </button>

@@ -15,7 +15,7 @@ export interface Brand {
 
 export interface MediaFile {
     id: string;
-    type: "video" | "audio" | "pdf" | "youtube";
+    type: "video" | "audio" | "pdf" | "youtube" | "image";
     url: string;
     fileName: string;
     title?: string;
@@ -29,7 +29,7 @@ export interface Training {
     title: string;
     description: string;
     mediaFiles?: MediaFile[];        // Multiple files supported
-    mediaType?: "video" | "audio" | "pdf";  // Legacy: primary type
+    mediaType?: "video" | "audio" | "pdf" | "image";  // Legacy: primary type
     mediaUrl?: string;               // Legacy: single file URL
     mediaDriveUrl?: string;          // Legacy: Google Drive URL
     thumbnailUrl?: string;
