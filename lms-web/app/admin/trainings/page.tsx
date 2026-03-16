@@ -74,6 +74,9 @@ export default function AdminTrainingsPage() {
         if (training.mediaType) {
             types.add(training.mediaType);
         }
+        if ((training.flashcardActivities?.length || 0) > 0) {
+            types.add("flashcards");
+        }
 
         // Return mixed icons
         if (types.size === 0) return <span title="Sem conteúdo">📁</span>;
@@ -85,6 +88,7 @@ export default function AdminTrainingsPage() {
                 {types.has("audio") && <span title="Áudio">🎧</span>}
                 {types.has("pdf") && <span title="PDF">📄</span>}
                 {types.has("image") && <span title="Imagem">🖼️</span>}
+                {types.has("flashcards") && <span title="Flashcards">🗂️</span>}
             </div>
         );
     };
@@ -158,9 +162,9 @@ export default function AdminTrainingsPage() {
                                             {getMediaIcons(training)}
                                         </td>
                                         <td className="px-6 py-4">
-                                            {(training.mediaFiles?.length || 0) > 0 ? (
+                                            {(training.mediaFiles?.length || 0) + (training.flashcardActivities?.length || 0) > 0 ? (
                                                 <span className="text-green-600 text-sm">
-                                                    ✓ {training.mediaFiles?.length} ficheiro{(training.mediaFiles?.length || 0) > 1 ? 's' : ''}
+                                                    ✓ {(training.mediaFiles?.length || 0) + (training.flashcardActivities?.length || 0)} conteúdo{((training.mediaFiles?.length || 0) + (training.flashcardActivities?.length || 0)) > 1 ? 's' : ''}
                                                 </span>
                                             ) : training.mediaUrl ? (
                                                 <span className="text-green-600 text-sm">✓ 1 ficheiro</span>

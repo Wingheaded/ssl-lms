@@ -23,12 +23,29 @@ export interface MediaFile {
     uploadedAt: Date;
 }
 
+export interface Flashcard {
+    id: number;
+    front: string;
+    back: string;
+}
+
+export interface FlashcardActivity {
+    id: string;
+    type: "flashcards";
+    title: string;
+    sourceFileName: string;
+    cardCount: number;
+    cards: Flashcard[];
+    createdAt: Date;
+}
+
 export interface Training {
     id: string;
     brandId: string;
     title: string;
     description: string;
     mediaFiles?: MediaFile[];        // Multiple files supported
+    flashcardActivities?: FlashcardActivity[];
     mediaType?: "video" | "audio" | "pdf" | "image";  // Legacy: primary type
     mediaUrl?: string;               // Legacy: single file URL
     mediaDriveUrl?: string;          // Legacy: Google Drive URL

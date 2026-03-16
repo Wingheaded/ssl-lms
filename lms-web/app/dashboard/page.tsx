@@ -83,7 +83,7 @@ export default function DashboardPage() {
                     })
                 );
 
-                setProgressList(progressWithDetails);
+                setProgressList(progressWithDetails.filter((progress) => progress.training));
             } catch (err) {
                 console.error("Error fetching progress:", err);
                 setError("Não foi possível carregar o seu progresso. Por favor, tente novamente.");

@@ -8,6 +8,124 @@ setGlobalOptions({ maxInstances: 10 });
 admin.initializeApp();
 const db = admin.firestore();
 
+type TrainingCleanupSummary = {
+    trainingDeleted: number;
+    storageFilesDeleted: number;
+    progressDeleted: number;
+    trainingVisitsDeleted: number;
+    quizSessionsDeleted: number;
+    quizzesDeleted: number;
+    quizQuestionsDeleted: number;
+    quizAnswersDeleted: number;
+};
+
+async function deleteDocs(
+    docs: FirebaseFirestore.QueryDocumentSnapshot[]
+): Promise<number> {
+    if (docs.length === 0) return 0;
+
+    let deleted = 0;
+    for (let index = 0; index < docs.length; index += 450) {
+        const batch = db.batch();
+        const chunk = docs.slice(index, index + 450);
+        chunk.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+        deleted += chunk.length;
+    }
+
+    return deleted;
+}
+
+async function deleteStorageFilesForTraining(trainingId: string): Promise<number> {
+    const bucket = admin.storage().bucket();
+    const [files] = await bucket.getFiles({prefix: `trainings/${trainingId}/`});
+
+    await Promise.all(files.map(async (file) => {
+        try {
+            await file.delete();
+        } catch (error: any) {
+            if (error?.code !== 404) {
+                throw error;
+            }
+        }
+    }));
+
+    return files.length;
+}
+
+async function deleteLegacyQuizArtifacts(
+    trainingId: string,
+    summary: TrainingCleanupSummary
+): Promise<void> {
+    const quizzesSnap = await db
+        .collection("quizzes")
+        .where("trainingId", "==", trainingId)
+        .get();
+
+    for (const quizDoc of quizzesSnap.docs) {
+        const questionsSnap = await db
+            .collection("quizQuestions")
+            .where("quizId", "==", quizDoc.id)
+            .get();
+
+        for (const questionDoc of questionsSnap.docs) {
+            const answersSnap = await db
+                .collection("quizAnswers")
+                .where("questionId", "==", questionDoc.id)
+                .get();
+
+            summary.quizAnswersDeleted += await deleteDocs(answersSnap.docs);
+        }
+
+        summary.quizQuestionsDeleted += await deleteDocs(questionsSnap.docs);
+    }
+
+    summary.quizzesDeleted += await deleteDocs(quizzesSnap.docs);
+}
+
+async function deleteTrainingArtifacts(trainingId: string): Promise<TrainingCleanupSummary> {
+    const summary: TrainingCleanupSummary = {
+        trainingDeleted: 0,
+        storageFilesDeleted: 0,
+        progressDeleted: 0,
+        trainingVisitsDeleted: 0,
+        quizSessionsDeleted: 0,
+        quizzesDeleted: 0,
+        quizQuestionsDeleted: 0,
+        quizAnswersDeleted: 0,
+    };
+
+    summary.storageFilesDeleted = await deleteStorageFilesForTraining(trainingId);
+
+    const progressSnap = await db
+        .collection("progress")
+        .where("trainingId", "==", trainingId)
+        .get();
+    summary.progressDeleted += await deleteDocs(progressSnap.docs);
+
+    const quizSessionsSnap = await db
+        .collection("quizSessions")
+        .where("trainingId", "==", trainingId)
+        .get();
+    summary.quizSessionsDeleted += await deleteDocs(quizSessionsSnap.docs);
+
+    const trainingVisitsSnap = await db.collectionGroup("trainingVisits").get();
+    summary.trainingVisitsDeleted += await deleteDocs(
+        trainingVisitsSnap.docs.filter((doc) => doc.id === trainingId)
+    );
+
+    await deleteLegacyQuizArtifacts(trainingId, summary);
+
+    const trainingRef = db.collection("trainings").doc(trainingId);
+    const trainingDoc = await trainingRef.get();
+    if (trainingDoc.exists) {
+        await trainingRef.delete();
+        summary.trainingDeleted = 1;
+    }
+
+    return summary;
+}
+
 /**
  * submitQuiz - Callable Cloud Function for secure quiz scoring
  * 
@@ -310,5 +428,107 @@ export const setAdminClaim = onCall(async (request) => {
     }
 });
 
+export const deleteTrainingCascade = onCall(async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "User must be logged in.");
+    }
+
+    if (request.auth.token.admin !== true) {
+        throw new HttpsError("permission-denied", "Only admins can delete trainings.");
+    }
+
+    const {trainingId} = request.data || {};
+    if (!trainingId || typeof trainingId !== "string") {
+        throw new HttpsError("invalid-argument", "trainingId is required.");
+    }
+
+    try {
+        const summary = await deleteTrainingArtifacts(trainingId);
+        logger.info("Training deleted with cascade cleanup", {
+            trainingId,
+            by: request.auth.uid,
+            summary,
+        });
+        return {success: true, summary};
+    } catch (error) {
+        logger.error("deleteTrainingCascade error", {trainingId, error});
+        throw new HttpsError("internal", "Failed to delete training completely.");
+    }
+});
+
+export const cleanupOrphanedTrainingData = onCall(async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "User must be logged in.");
+    }
+
+    if (request.auth.token.admin !== true) {
+        throw new HttpsError("permission-denied", "Only admins can run cleanup.");
+    }
+
+    try {
+        const referencedTrainingIds = new Set<string>();
+
+        const [progressSnap, quizSnap, quizSessionsSnap, trainingVisitsSnap] = await Promise.all([
+            db.collection("progress").get(),
+            db.collection("quizzes").get(),
+            db.collection("quizSessions").get(),
+            db.collectionGroup("trainingVisits").get(),
+        ]);
+
+        progressSnap.docs.forEach((doc) => {
+            const trainingId = doc.data().trainingId;
+            if (typeof trainingId === "string" && trainingId) {
+                referencedTrainingIds.add(trainingId);
+            }
+        });
+
+        quizSnap.docs.forEach((doc) => {
+            const trainingId = doc.data().trainingId;
+            if (typeof trainingId === "string" && trainingId) {
+                referencedTrainingIds.add(trainingId);
+            }
+        });
+
+        quizSessionsSnap.docs.forEach((doc) => {
+            const trainingId = doc.data().trainingId;
+            if (typeof trainingId === "string" && trainingId) {
+                referencedTrainingIds.add(trainingId);
+            }
+        });
+
+        trainingVisitsSnap.docs.forEach((doc) => {
+            if (doc.id) {
+                referencedTrainingIds.add(doc.id);
+            }
+        });
+
+        const cleanedTrainingIds: string[] = [];
+        const summaries: Record<string, TrainingCleanupSummary> = {};
+
+        for (const trainingId of referencedTrainingIds) {
+            const trainingDoc = await db.collection("trainings").doc(trainingId).get();
+            if (!trainingDoc.exists) {
+                cleanedTrainingIds.push(trainingId);
+                summaries[trainingId] = await deleteTrainingArtifacts(trainingId);
+            }
+        }
+
+        logger.info("Orphaned training data cleanup completed", {
+            by: request.auth.uid,
+            cleanedTrainingIds,
+            summaries,
+        });
+
+        return {
+            success: true,
+            cleanedTrainingIds,
+            summaries,
+        };
+    } catch (error) {
+        logger.error("cleanupOrphanedTrainingData error", error);
+        throw new HttpsError("internal", "Failed to cleanup orphaned training data.");
+    }
+});
+
 export { extractTranscript } from "./quiz/extractTranscript";
-export { generateQuiz } from "./quiz/generateQuiz";
+export { generateQuiz, previewQuiz } from "./quiz/generateQuiz";

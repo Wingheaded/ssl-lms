@@ -3,15 +3,29 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc, collection, getDocs, arrayUnion, arrayRemove, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, getDocs, arrayUnion, arrayRemove } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { useAuth } from "@/lib/auth-context";
 import { db, storage, functions } from "@/lib/firebase";
 import { httpsCallable } from "firebase/functions";
 import AppLayout from "@/components/AppLayout";
-import { Training, Brand, MediaFile } from "@/lib/types";
+import { parseFlashcardsCsv } from "@/lib/flashcards/parseCsv";
+import { Training, Brand, MediaFile, FlashcardActivity } from "@/lib/types";
 
-type UploadType = "video" | "audio" | "pdf" | "youtube" | "image";
+type UploadType = "video" | "audio" | "pdf" | "youtube" | "image" | "flashcards";
+
+interface QuizPreviewQuestion {
+    id: number;
+    question: string;
+    type: "single" | "boolean" | "multiple";
+    options: string[];
+    correctAnswer: number[];
+}
+
+interface QuizPreviewFact {
+    fact: string;
+    excerpt: string;
+}
 
 export default function EditTrainingPage() {
     const { user, loading, isAdmin } = useAuth();
@@ -40,6 +54,10 @@ export default function EditTrainingPage() {
     const [youtubeUrl, setYoutubeUrl] = useState("");
     const [transcript, setTranscript] = useState("");
     const [extracting, setExtracting] = useState(false);
+    const [previewingQuiz, setPreviewingQuiz] = useState(false);
+    const [quizPreviewQuestions, setQuizPreviewQuestions] = useState<QuizPreviewQuestion[]>([]);
+    const [quizPreviewFacts, setQuizPreviewFacts] = useState<QuizPreviewFact[]>([]);
+    const [quizPreviewError, setQuizPreviewError] = useState<string | null>(null);
 
 
 
@@ -119,24 +137,8 @@ export default function EditTrainingPage() {
         setIsDeleting(true);
 
         try {
-            // 1. Delete media files from Storage
-            const deletePromises = (training.mediaFiles || []).map(async (file) => {
-                if (file.type !== 'youtube' && (file.storagePath || file.url)) {
-                    try {
-                        const fileRef = file.storagePath
-                            ? ref(storage, file.storagePath)
-                            : ref(storage, file.url);
-                        await deleteObject(fileRef);
-                    } catch (err) {
-                        console.warn(`Failed to delete file ${file.fileName}:`, err);
-                        // Continue deleting record even if file delete fails
-                    }
-                }
-            });
-            await Promise.all(deletePromises);
-
-            // 2. Delete Training Document
-            await deleteDoc(doc(db, "trainings", trainingId));
+            const deleteTrainingFn = httpsCallable(functions, "deleteTrainingCascade");
+            await deleteTrainingFn({ trainingId });
 
             // Redirect
             router.push("/admin/trainings");
@@ -220,6 +222,66 @@ export default function EditTrainingPage() {
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !training) return;
+
+        if (selectedType === "flashcards") {
+            if (!file.name.toLowerCase().endsWith(".csv")) {
+                setMessage({ type: "error", text: "Por favor carregue um ficheiro .csv válido." });
+                return;
+            }
+
+            setUploading(true);
+            setUploadProgress(0);
+            setMessage(null);
+
+            try {
+                const content = await file.text();
+                const { cards, warnings } = parseFlashcardsCsv(content);
+
+                if (cards.length === 0) {
+                    setMessage({ type: "error", text: warnings[0] || "Não foi possível gerar flashcards válidos." });
+                    setUploading(false);
+                    return;
+                }
+
+                const newActivity: FlashcardActivity = {
+                    id: crypto.randomUUID(),
+                    type: "flashcards",
+                    title: file.name.replace(/\.csv$/i, ""),
+                    sourceFileName: file.name,
+                    cardCount: cards.length,
+                    cards,
+                    createdAt: new Date(),
+                };
+
+                const updatedActivities = [...(training.flashcardActivities || []), newActivity];
+
+                await updateDoc(doc(db, "trainings", trainingId), {
+                    flashcardActivities: updatedActivities,
+                });
+
+                setTraining({
+                    ...training,
+                    flashcardActivities: updatedActivities,
+                });
+
+                setMessage({
+                    type: "success",
+                    text: warnings.length > 0
+                        ? `Flashcards criados (${cards.length} cartões). ${warnings.join(" ")}`
+                        : `Flashcards criados com sucesso (${cards.length} cartões).`,
+                });
+            } catch (err) {
+                console.error("Flashcard parse error:", err);
+                setMessage({ type: "error", text: "Erro ao processar o ficheiro CSV." });
+            } finally {
+                setUploading(false);
+                setUploadProgress(0);
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                }
+            }
+            return;
+        }
 
         // Validate file type
         const allowedTypes: Record<string, string[]> = {
@@ -394,6 +456,87 @@ export default function EditTrainingPage() {
         }
     };
 
+    const handlePreviewQuiz = async () => {
+        if (!trainingId) return;
+
+        setPreviewingQuiz(true);
+        setQuizPreviewError(null);
+
+        try {
+            const previewQuizFn = httpsCallable(functions, "previewQuiz");
+            const result = await previewQuizFn({ trainingId });
+            const data = result.data as {
+                extractedFacts: QuizPreviewFact[];
+                questions: QuizPreviewQuestion[];
+            };
+
+            setQuizPreviewFacts(data.extractedFacts || []);
+            setQuizPreviewQuestions(data.questions || []);
+        } catch (err) {
+            console.error("Preview quiz error:", err);
+            const errorMessage = err instanceof Error ? err.message : "Erro ao gerar a pré-visualização do quiz.";
+            setQuizPreviewError(errorMessage);
+        } finally {
+            setPreviewingQuiz(false);
+        }
+    };
+
+    const handleUpdateFlashcardTitle = async (activity: FlashcardActivity, newTitle: string) => {
+        if (!training) return;
+
+        const trimmedTitle = newTitle.trim() || activity.sourceFileName.replace(/\.csv$/i, "");
+        const updatedActivities = (training.flashcardActivities || []).map((item) =>
+            item.id === activity.id ? { ...item, title: trimmedTitle } : item
+        );
+
+        setTraining({
+            ...training,
+            flashcardActivities: updatedActivities,
+        });
+
+        try {
+            await updateDoc(doc(db, "trainings", trainingId), {
+                flashcardActivities: updatedActivities,
+            });
+        } catch (err) {
+            console.error("Update flashcard title error:", err);
+            setMessage({ type: "error", text: "Erro ao atualizar o título do deck." });
+            setTraining({
+                ...training,
+                flashcardActivities: training.flashcardActivities,
+            });
+        }
+    };
+
+    const handleDeleteFlashcardActivity = async (activity: FlashcardActivity) => {
+        if (!training || !confirm(`Tem certeza que deseja apagar o deck "${activity.title}"?`)) {
+            return;
+        }
+
+        setDeleting(activity.id);
+        setMessage(null);
+
+        const updatedActivities = (training.flashcardActivities || []).filter((item) => item.id !== activity.id);
+
+        try {
+            await updateDoc(doc(db, "trainings", trainingId), {
+                flashcardActivities: updatedActivities,
+            });
+
+            setTraining({
+                ...training,
+                flashcardActivities: updatedActivities,
+            });
+
+            setMessage({ type: "success", text: "Deck de flashcards apagado com sucesso." });
+        } catch (err) {
+            console.error("Delete flashcard activity error:", err);
+            setMessage({ type: "error", text: "Erro ao apagar o deck de flashcards." });
+        } finally {
+            setDeleting(null);
+        }
+    };
+
     const getFileIcon = (type: string) => {
         switch (type) {
             case "video": return "🎬";
@@ -401,6 +544,7 @@ export default function EditTrainingPage() {
             case "pdf": return "📄";
             case "youtube": return "▶️";
             case "image": return "🖼️";
+            case "flashcards": return "🗂️";
             default: return "📁";
         }
     };
@@ -426,11 +570,13 @@ export default function EditTrainingPage() {
     }
 
     const mediaFiles = training.mediaFiles || [];
+    const flashcardActivities = training.flashcardActivities || [];
     const uploadTypeOptions: { value: UploadType; label: string; accept: string | null }[] = [
         { value: "video", label: "🎬 Vídeo", accept: ".mp4,.webm,.mov" },
         { value: "audio", label: "🎧 Áudio", accept: ".mp3,.wav,.m4a" },
         { value: "pdf", label: "📄 PDF", accept: ".pdf" },
         { value: "image", label: "🖼️ Imagem", accept: ".jpg,.jpeg,.png,.webp,.gif" },
+        { value: "flashcards", label: "🗂️ Flashcards", accept: ".csv" },
         { value: "youtube", label: "▶️ YouTube", accept: null },
     ];
 
@@ -512,14 +658,14 @@ export default function EditTrainingPage() {
                         </select>
                     </div>
 
-                    {/* Existing Files */}
+                    {/* Existing Content */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Ficheiros ({mediaFiles.length})
+                            Conteúdos ({mediaFiles.length + flashcardActivities.length})
                         </label>
 
-                        {mediaFiles.length === 0 ? (
-                            <p className="text-sm text-gray-500 italic">Nenhum ficheiro carregado</p>
+                        {mediaFiles.length === 0 && flashcardActivities.length === 0 ? (
+                            <p className="text-sm text-gray-500 italic">Nenhum conteúdo carregado</p>
                         ) : (
                             <div className="space-y-4">
                                 {mediaFiles.map((file) => (
@@ -563,6 +709,43 @@ export default function EditTrainingPage() {
                                         </div>
                                     </div>
                                 ))}
+
+                                {flashcardActivities.map((activity) => (
+                                    <div
+                                        key={activity.id}
+                                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 gap-4"
+                                    >
+                                        <div className="flex items-center gap-3 flex-1">
+                                            <span className="text-2xl flex-shrink-0">{getFileIcon(activity.type)}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                                                        flashcards • {activity.sourceFileName} • {activity.cardCount} cartões
+                                                    </span>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Título do deck"
+                                                        defaultValue={activity.title}
+                                                        onBlur={(e) => handleUpdateFlashcardTitle(activity, e.target.value)}
+                                                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 flex-shrink-0">
+                                            <div className="px-3 py-1.5 bg-white border border-gray-300 rounded text-gray-600 text-sm">
+                                                {activity.cards[0] ? `${activity.cards[0].front.slice(0, 40)}${activity.cards[0].front.length > 40 ? "..." : ""}` : "Sem preview"}
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteFlashcardActivity(activity)}
+                                                disabled={deleting === activity.id}
+                                                className="px-3 py-1.5 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 hover:border-red-200 text-sm font-medium transition-colors disabled:opacity-50"
+                                            >
+                                                {deleting === activity.id ? "..." : "Apagar"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -573,16 +756,26 @@ export default function EditTrainingPage() {
                             <label className="block text-sm font-medium text-gray-700">
                                 Transcrição (IA Quiz)
                             </label>
-                            {mediaFiles.some(f => f.type === 'youtube' || f.url.includes('youtube')) && (
+                            <div className="flex items-center gap-2">
                                 <button
                                     type="button"
-                                    onClick={handleExtractTranscript}
-                                    disabled={extracting}
-                                    className="px-3 py-1.5 bg-amber-100 text-amber-800 rounded text-xs font-medium hover:bg-amber-200 disabled:opacity-50 transition-colors"
+                                    onClick={handlePreviewQuiz}
+                                    disabled={previewingQuiz}
+                                    className="px-3 py-1.5 bg-sage/10 text-sage rounded text-xs font-medium hover:bg-sage/20 disabled:opacity-50 transition-colors"
                                 >
-                                    {extracting ? "A extrair..." : "✨ Extrair do YouTube"}
+                                    {previewingQuiz ? "A gerar preview..." : "👁️ Pré-visualizar Quiz"}
                                 </button>
-                            )}
+                                {mediaFiles.some(f => f.type === 'youtube' || f.url.includes('youtube')) && (
+                                    <button
+                                        type="button"
+                                        onClick={handleExtractTranscript}
+                                        disabled={extracting}
+                                        className="px-3 py-1.5 bg-amber-100 text-amber-800 rounded text-xs font-medium hover:bg-amber-200 disabled:opacity-50 transition-colors"
+                                    >
+                                        {extracting ? "A extrair..." : "✨ Extrair do YouTube"}
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         <div className="relative">
@@ -607,12 +800,93 @@ export default function EditTrainingPage() {
                         <p className="text-xs text-gray-500 mt-1">
                             Esta transcrição será usada para gerar o quiz automaticamente.
                         </p>
+
+                        {(quizPreviewError || quizPreviewQuestions.length > 0) && (
+                            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-gray-800">Pré-visualização do Quiz IA</h3>
+                                        <p className="text-xs text-gray-500">
+                                            Reveja os factos usados pelo agente e regenere até a qualidade ficar correta.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handlePreviewQuiz}
+                                        disabled={previewingQuiz}
+                                        className="px-3 py-2 bg-white border border-gray-300 rounded text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                    >
+                                        {previewingQuiz ? "A regenerar..." : "Regenerar"}
+                                    </button>
+                                </div>
+
+                                {quizPreviewError && (
+                                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                        {quizPreviewError}
+                                    </div>
+                                )}
+
+                                {quizPreviewFacts.length > 0 && (
+                                    <div>
+                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                                            Factos extraídos da transcrição
+                                        </h4>
+                                        <div className="space-y-2">
+                                            {quizPreviewFacts.map((fact, index) => (
+                                                <div key={`${fact.fact}-${index}`} className="rounded-lg border border-gray-200 bg-white p-3">
+                                                    <p className="text-sm font-medium text-gray-800">{index + 1}. {fact.fact}</p>
+                                                    <p className="text-xs text-gray-500 mt-1">{fact.excerpt}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {quizPreviewQuestions.length > 0 && (
+                                    <div>
+                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                                            Perguntas geradas
+                                        </h4>
+                                        <div className="space-y-3">
+                                            {quizPreviewQuestions.map((question, index) => (
+                                                <div key={question.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                                                    <div className="flex items-start justify-between gap-3 mb-3">
+                                                        <p className="text-sm font-medium text-gray-800">
+                                                            {index + 1}. {question.question}
+                                                        </p>
+                                                        <span className="text-[11px] uppercase tracking-wide text-gray-500">
+                                                            {question.type}
+                                                        </span>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        {question.options.map((option, optionIndex) => {
+                                                            const isCorrect = question.correctAnswer.includes(optionIndex);
+                                                            return (
+                                                                <div
+                                                                    key={`${question.id}-${optionIndex}`}
+                                                                    className={`rounded-md border px-3 py-2 text-sm ${isCorrect
+                                                                        ? "border-green-300 bg-green-50 text-green-800"
+                                                                        : "border-gray-200 bg-gray-50 text-gray-700"
+                                                                        }`}
+                                                                >
+                                                                    {option} {isCorrect ? "✓" : ""}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Upload New File */}
                     <div className="border-t border-gray-100 pt-6">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Adicionar Ficheiro
+                            Adicionar Conteúdo
                         </label>
 
                         {/* File Type Selection */}
@@ -664,6 +938,7 @@ export default function EditTrainingPage() {
                                     accept={
                                         selectedType === "video" ? ".mp4,.webm,.mov" :
                                             selectedType === "audio" ? ".mp3,.wav,.m4a" :
+                                                selectedType === "flashcards" ? ".csv" :
                                                 selectedType === "image" ? ".jpg,.jpeg,.png,.webp,.gif" : ".pdf"
                                     }
                                     className="hidden"
@@ -691,12 +966,19 @@ export default function EditTrainingPage() {
                                                 ? "vídeo"
                                                 : selectedType === "audio"
                                                     ? "áudio"
+                                                    : selectedType === "flashcards"
+                                                        ? "deck de flashcards (.csv)"
                                                     : selectedType === "image"
                                                         ? "imagem"
                                                         : "PDF"}
                                         </span>
                                     )}
                                 </button>
+                                {selectedType === "flashcards" && (
+                                    <p className="text-xs text-gray-500 mt-2">
+                                        O CSV deve usar a coluna A como frente/pergunta e a coluna B como verso/resposta.
+                                    </p>
+                                )}
                             </>
                         )}
                     </div>

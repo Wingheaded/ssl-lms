@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { Training, Progress } from "@/lib/types";
 import AppLayout from "@/components/AppLayout";
+import FlashcardPlayer from "@/components/FlashcardPlayer";
 import { LoadingSpinner, ErrorState } from "@/components/StateComponents";
 
 // Minimum watch time in seconds before "Mark as Watched" appears
@@ -426,6 +427,14 @@ export default function TrainingDetailPage() {
                                             </a>
                                         ))}
                                     </div>
+                                </div>
+                            )}
+
+                            {(training.flashcardActivities || []).length > 0 && (
+                                <div className="mb-8">
+                                    {(training.flashcardActivities || []).map((activity) => (
+                                        <FlashcardPlayer key={activity.id} activity={activity} />
+                                    ))}
                                 </div>
                             )}
                         </>

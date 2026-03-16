@@ -214,7 +214,10 @@ export default function TrainingsPage() {
                                         <div className="text-sm text-charcoal/40 mt-1 flex gap-1">
                                             {(() => {
                                                 const files = training.mediaFiles || [];
-                                                const types = new Set(files.map(f => f.type));
+                                                const types = new Set<string>(files.map(f => f.type));
+                                                if ((training.flashcardActivities?.length || 0) > 0) {
+                                                    types.add("flashcards");
+                                                }
                                                 // Fallback for legacy
                                                 if (files.length === 0 && training.mediaType) {
                                                     types.add(training.mediaType);
@@ -225,6 +228,7 @@ export default function TrainingsPage() {
                                                         {types.has("audio") && <span title="Áudio">🎧</span>}
                                                         {types.has("pdf") && <span title="PDF">📄</span>}
                                                         {types.has("image") && <span title="Imagem">🖼️</span>}
+                                                        {types.has("flashcards") && <span title="Flashcards">🗂️</span>}
                                                     </>
                                                 );
                                             })()}
