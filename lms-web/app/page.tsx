@@ -1,15 +1,52 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithPopup } from "firebase/auth";
+import { getRedirectResult, signInWithPopup, signInWithRedirect } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { LoadingSpinner } from "@/components/StateComponents";
 
+const MOBILE_USER_AGENT_REGEX = /iPhone|iPad|iPod|Android|Mobile|Tablet/i;
+
+function isMobileBrowser() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return MOBILE_USER_AGENT_REGEX.test(navigator.userAgent);
+}
+
+function getAuthErrorMessage(error: unknown) {
+  const authError = error as { code?: string; message?: string } | null;
+  const code = authError?.code;
+  const message = authError?.message?.toLowerCase() ?? "";
+
+  if (message.includes("missing initial state")) {
+    return "O navegador perdeu a sessão temporária de início de sessão. Tente novamente abrindo o site diretamente no Safari.";
+  }
+
+  switch (code) {
+    case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request":
+      return "O início de sessão foi cancelado.";
+    case "auth/popup-blocked":
+      return "O navegador bloqueou a janela de início de sessão.";
+    case "auth/network-request-failed":
+      return "Falha de rede. Tente novamente.";
+    case "auth/unauthorized-domain":
+      return "Este domínio não está autorizado no Firebase Authentication.";
+    default:
+      return "Não foi possível iniciar sessão com Google.";
+  }
+}
+
 export default function LoginPage() {
   const { user, loading, error } = useAuth();
   const router = useRouter();
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isCheckingRedirect, setIsCheckingRedirect] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -17,21 +54,65 @@ export default function LoginPage() {
     }
   }, [user, router]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function checkRedirectResult() {
+      try {
+        await getRedirectResult(auth);
+      } catch (err) {
+        console.error("Redirect login error:", err);
+        if (isMounted) {
+          setLoginError(getAuthErrorMessage(err));
+        }
+      } finally {
+        if (isMounted) {
+          setIsCheckingRedirect(false);
+          setIsSigningIn(false);
+        }
+      }
+    }
+
+    void checkRedirectResult();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleLogin = async () => {
+    setLoginError(null);
+    setIsSigningIn(true);
+
     try {
+      if (isMobileBrowser()) {
+        await signInWithRedirect(auth, googleProvider);
+        return;
+      }
+
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
       console.error("Login error:", err);
+      setLoginError(getAuthErrorMessage(err));
+      setIsSigningIn(false);
     }
   };
 
-  if (loading) {
+  if (loading || isCheckingRedirect || isSigningIn) {
+    const message = loading
+      ? "A verificar autenticação..."
+      : isCheckingRedirect
+        ? "A concluir autenticação..."
+        : "A iniciar sessão...";
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-cream">
-        <LoadingSpinner message="A verificar autenticação..." />
+        <LoadingSpinner message={message} />
       </div>
     );
   }
+
+  const displayedError = error ?? loginError;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-cream px-4">
@@ -45,9 +126,9 @@ export default function LoginPage() {
         </p>
 
         {/* Error message */}
-        {error && (
+        {displayedError && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
+            {displayedError}
           </div>
         )}
 
