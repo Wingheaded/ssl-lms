@@ -25,6 +25,11 @@ export default function TrainingDetailPage() {
     const [progress, setProgress] = useState<Progress | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [selectedImage, setSelectedImage] = useState<{
+        url: string;
+        alt: string;
+        title: string;
+    } | null>(null);
 
     // Watch tracking
     const [watchTime, setWatchTime] = useState(0);
@@ -98,6 +103,25 @@ export default function TrainingDetailPage() {
             }
         };
     }, [progress?.watched]);
+
+    useEffect(() => {
+        if (!selectedImage) return;
+
+        const previousOverflow = document.body.style.overflow;
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setSelectedImage(null);
+            }
+        };
+
+        document.body.style.overflow = "hidden";
+        window.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [selectedImage]);
 
     const handleMarkWatched = async () => {
         if (!user || !training) return;
@@ -183,7 +207,8 @@ export default function TrainingDetailPage() {
 
     return (
         <AppLayout>
-            <div>
+            <>
+                <div>
                 {/* Breadcrumb */}
                 <div className="mb-4">
                     <Link
@@ -353,31 +378,39 @@ export default function TrainingDetailPage() {
                                         Imagens
                                     </h3>
                                     <div className="grid gap-4 sm:grid-cols-2">
-                                        {supportImages.map((file) => (
-                                            <a
-                                                key={file.id}
-                                                href={file.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="group overflow-hidden rounded-xl border border-taupe/20 bg-cream/30 shadow-sm transition-all hover:border-sage/40 hover:shadow-md"
-                                            >
-                                                <div className="relative h-56 w-full">
-                                                    <Image
-                                                        src={file.url}
-                                                        alt={file.title || file.fileName}
-                                                        fill
-                                                        unoptimized
-                                                        sizes="(min-width: 640px) 50vw, 100vw"
-                                                        className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                                                    />
-                                                </div>
-                                                <div className="border-t border-taupe/10 px-4 py-3">
-                                                    <p className="font-medium text-charcoal group-hover:text-sage-dark transition-colors">
-                                                        {file.title || file.fileName}
-                                                    </p>
-                                                </div>
-                                            </a>
-                                        ))}
+                                        {supportImages.map((file) => {
+                                            const imageTitle = file.title || file.fileName;
+
+                                            return (
+                                                <button
+                                                    key={file.id}
+                                                    type="button"
+                                                    onClick={() => setSelectedImage({
+                                                        url: file.url,
+                                                        alt: imageTitle,
+                                                        title: imageTitle
+                                                    })}
+                                                    aria-label={`Abrir imagem ${imageTitle}`}
+                                                    className="group cursor-pointer overflow-hidden rounded-xl border border-taupe/20 bg-cream/30 text-left shadow-sm transition-all hover:border-sage/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-2"
+                                                >
+                                                    <div className="relative h-56 w-full">
+                                                        <Image
+                                                            src={file.url}
+                                                            alt={imageTitle}
+                                                            fill
+                                                            unoptimized
+                                                            sizes="(min-width: 640px) 50vw, 100vw"
+                                                            className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                                                        />
+                                                    </div>
+                                                    <div className="border-t border-taupe/10 px-4 py-3">
+                                                        <p className="font-medium text-charcoal group-hover:text-sage-dark transition-colors">
+                                                            {imageTitle}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -492,7 +525,56 @@ export default function TrainingDetailPage() {
                         </p>
                     </div>
                 )}
-            </div>
+                </div>
+
+                {selectedImage && (
+                    <div
+                        className="fixed inset-0 z-50 bg-black/70 p-4 sm:p-6"
+                        onClick={() => setSelectedImage(null)}
+                    >
+                        <div className="flex min-h-full items-center justify-center">
+                            <div
+                                role="dialog"
+                                aria-modal="true"
+                                aria-labelledby="support-image-modal-title"
+                                className="relative w-full max-w-5xl rounded-2xl bg-white shadow-2xl"
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <div className="flex items-start justify-between gap-4 border-b border-taupe/20 px-5 py-4 sm:px-6">
+                                    <h2
+                                        id="support-image-modal-title"
+                                        className="font-display text-xl text-charcoal"
+                                    >
+                                        {selectedImage.title}
+                                    </h2>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedImage(null)}
+                                        className="inline-flex items-center gap-2 rounded-lg border border-taupe/30 px-3 py-2 text-sm font-medium text-charcoal transition-colors hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage focus-visible:ring-offset-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <path d="M18 6 6 18"></path>
+                                            <path d="m6 6 12 12"></path>
+                                        </svg>
+                                        Fechar
+                                    </button>
+                                </div>
+                                <div className="flex items-center justify-center p-4 sm:p-6">
+                                    <Image
+                                        src={selectedImage.url}
+                                        alt={selectedImage.alt}
+                                        width={1600}
+                                        height={1200}
+                                        unoptimized
+                                        sizes="100vw"
+                                        className="h-auto max-h-[85vh] w-full rounded-lg object-contain"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </>
         </AppLayout>
     );
 }
