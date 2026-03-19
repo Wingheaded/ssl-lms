@@ -19,6 +19,7 @@ export interface MediaFile {
     url: string;
     fileName: string;
     title?: string;
+    order?: number;
     storagePath?: string; // Explicit path for robust deletion
     uploadedAt: Date;
 }
@@ -36,6 +37,7 @@ export interface FlashcardActivity {
     sourceFileName: string;
     cardCount: number;
     cards: Flashcard[];
+    order?: number;
     createdAt: Date;
 }
 
