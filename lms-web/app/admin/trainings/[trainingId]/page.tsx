@@ -767,15 +767,15 @@ export default function EditTrainingPage() {
                         {mediaFiles.length === 0 && flashcardActivities.length === 0 ? (
                             <p className="text-sm text-gray-500 italic">Nenhum conteúdo carregado</p>
                         ) : (
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                                 {orderedContentItems.map((content, index) => {
                                     const isDragged = draggedContentId === content.id;
                                     const isDropTarget = dragOverContentId === content.id && draggedContentId !== content.id;
                                     const cardClasses = [
-                                        "flex flex-col gap-4 rounded-lg border bg-gray-50 p-4 transition-colors sm:flex-row sm:items-center sm:justify-between",
-                                        isDragged ? "border-amber-300 bg-amber-50 opacity-60" : "border-gray-200",
-                                        isDropTarget && dragOverPosition === "before" ? "border-t-2 border-t-amber-400" : "",
-                                        isDropTarget && dragOverPosition === "after" ? "border-b-2 border-b-amber-400" : "",
+                                        "grid grid-cols-[auto_1fr] gap-3 rounded-lg border bg-gray-50 p-4 transition-all overflow-hidden cursor-grab active:cursor-grabbing",
+                                        isDragged ? "border-amber-300 bg-amber-50 opacity-50 scale-[0.98]" : "border-gray-200 hover:border-gray-300",
+                                        isDropTarget && dragOverPosition === "before" ? "shadow-[0_-3px_0_0_#f59e0b]" : "",
+                                        isDropTarget && dragOverPosition === "after" ? "shadow-[0_3px_0_0_#f59e0b]" : "",
                                     ].filter(Boolean).join(" ");
 
                                     if (content.kind === "media") {
@@ -784,62 +784,68 @@ export default function EditTrainingPage() {
                                         return (
                                             <div
                                                 key={file.id}
+                                                draggable={!reordering}
+                                                onDragStart={(event) => handleContentDragStart(event, file.id)}
+                                                onDragEnd={resetDragState}
                                                 onDragOver={(event) => handleContentDragOver(event, file.id)}
                                                 onDrop={(event) => void handleContentDrop(event, file.id)}
                                                 className={cardClasses}
                                             >
-                                                <div className="flex items-center gap-3 flex-1">
+                                                {/* Column 1: Drag handle */}
+                                                <div className="flex flex-col items-center justify-center gap-1 self-center">
                                                     <div
-                                                        draggable={!reordering}
-                                                        onDragStart={(event) => handleContentDragStart(event, file.id)}
-                                                        onDragEnd={resetDragState}
-                                                        aria-label={`Reordenar ${file.title || file.fileName}`}
-                                                        className="flex h-11 w-11 flex-shrink-0 cursor-grab items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-500 transition-colors hover:border-amber-300 hover:text-amber-700 active:cursor-grabbing"
+                                                        className="flex h-10 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:text-amber-600"
                                                         title="Arraste para reordenar"
                                                     >
-                                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                                                            <circle cx="6" cy="4.5" r="1.1" fill="currentColor" />
-                                                            <circle cx="12" cy="4.5" r="1.1" fill="currentColor" />
-                                                            <circle cx="6" cy="9" r="1.1" fill="currentColor" />
-                                                            <circle cx="12" cy="9" r="1.1" fill="currentColor" />
-                                                            <circle cx="6" cy="13.5" r="1.1" fill="currentColor" />
-                                                            <circle cx="12" cy="13.5" r="1.1" fill="currentColor" />
+                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                                            <circle cx="5" cy="3.5" r="1.2" fill="currentColor" />
+                                                            <circle cx="11" cy="3.5" r="1.2" fill="currentColor" />
+                                                            <circle cx="5" cy="8" r="1.2" fill="currentColor" />
+                                                            <circle cx="11" cy="8" r="1.2" fill="currentColor" />
+                                                            <circle cx="5" cy="12.5" r="1.2" fill="currentColor" />
+                                                            <circle cx="11" cy="12.5" r="1.2" fill="currentColor" />
                                                         </svg>
                                                     </div>
-                                                    <span className="text-2xl flex-shrink-0">{getFileIcon(file.type)}</span>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wide text-gray-500">
-                                                            <span>Posição {index + 1}</span>
-                                                            <span>•</span>
-                                                            <span>{file.type}</span>
-                                                            <span>•</span>
-                                                            <span className="truncate">{file.fileName}</span>
-                                                        </div>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Título de exibição (ex: Aula 1 - Introdução)"
-                                                            defaultValue={file.title || ""}
-                                                            onBlur={(e) => handleUpdateTitle(file, e.target.value)}
-                                                            className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                                                        />
-                                                    </div>
+                                                    <span className="text-[10px] font-bold text-gray-400">{index + 1}</span>
                                                 </div>
-                                                <div className="flex items-center gap-3 flex-shrink-0">
-                                                    <a
-                                                        href={file.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="px-3 py-1.5 bg-white border border-gray-300 rounded text-amber-700 hover:bg-amber-50 hover:border-amber-200 text-sm font-medium transition-colors"
-                                                    >
-                                                        Ver
-                                                    </a>
-                                                    <button
-                                                        onClick={() => handleDeleteFile(file)}
-                                                        disabled={deleting === file.id}
-                                                        className="px-3 py-1.5 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 hover:border-red-200 text-sm font-medium transition-colors disabled:opacity-50"
-                                                    >
-                                                        {deleting === file.id ? "..." : "Apagar"}
-                                                    </button>
+
+                                                {/* Column 2: Content */}
+                                                <div className="min-w-0 space-y-2">
+                                                    <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-gray-500">
+                                                        <span className="text-lg leading-none">{getFileIcon(file.type)}</span>
+                                                        <span className="font-medium">{file.type}</span>
+                                                        <span>•</span>
+                                                        <span className="truncate">{file.fileName}</span>
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Título de exibição (ex: Aula 1 - Introdução)"
+                                                        defaultValue={file.title || ""}
+                                                        onBlur={(e) => handleUpdateTitle(file, e.target.value)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        draggable={false}
+                                                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-text"
+                                                    />
+                                                    <div className="flex items-center gap-2 justify-end">
+                                                        <a
+                                                            href={file.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            draggable={false}
+                                                            className="px-3 py-1 bg-white border border-gray-300 rounded text-amber-700 hover:bg-amber-50 hover:border-amber-200 text-xs font-medium transition-colors"
+                                                        >
+                                                            Ver
+                                                        </a>
+                                                        <button
+                                                            onClick={() => handleDeleteFile(file)}
+                                                            disabled={deleting === file.id}
+                                                            draggable={false}
+                                                            className="px-3 py-1 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 hover:border-red-200 text-xs font-medium transition-colors disabled:opacity-50"
+                                                        >
+                                                            {deleting === file.id ? "..." : "Apagar"}
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -850,59 +856,64 @@ export default function EditTrainingPage() {
                                     return (
                                         <div
                                             key={activity.id}
+                                            draggable={!reordering}
+                                            onDragStart={(event) => handleContentDragStart(event, activity.id)}
+                                            onDragEnd={resetDragState}
                                             onDragOver={(event) => handleContentDragOver(event, activity.id)}
                                             onDrop={(event) => void handleContentDrop(event, activity.id)}
                                             className={cardClasses}
                                         >
-                                            <div className="flex items-center gap-3 flex-1">
+                                            {/* Column 1: Drag handle */}
+                                            <div className="flex flex-col items-center justify-center gap-1 self-center">
                                                 <div
-                                                    draggable={!reordering}
-                                                    onDragStart={(event) => handleContentDragStart(event, activity.id)}
-                                                    onDragEnd={resetDragState}
-                                                    aria-label={`Reordenar ${activity.title}`}
-                                                    className="flex h-11 w-11 flex-shrink-0 cursor-grab items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-500 transition-colors hover:border-amber-300 hover:text-amber-700 active:cursor-grabbing"
+                                                    className="flex h-10 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:text-amber-600"
                                                     title="Arraste para reordenar"
                                                 >
-                                                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                                                        <circle cx="6" cy="4.5" r="1.1" fill="currentColor" />
-                                                        <circle cx="12" cy="4.5" r="1.1" fill="currentColor" />
-                                                        <circle cx="6" cy="9" r="1.1" fill="currentColor" />
-                                                        <circle cx="12" cy="9" r="1.1" fill="currentColor" />
-                                                        <circle cx="6" cy="13.5" r="1.1" fill="currentColor" />
-                                                        <circle cx="12" cy="13.5" r="1.1" fill="currentColor" />
+                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                                        <circle cx="5" cy="3.5" r="1.2" fill="currentColor" />
+                                                        <circle cx="11" cy="3.5" r="1.2" fill="currentColor" />
+                                                        <circle cx="5" cy="8" r="1.2" fill="currentColor" />
+                                                        <circle cx="11" cy="8" r="1.2" fill="currentColor" />
+                                                        <circle cx="5" cy="12.5" r="1.2" fill="currentColor" />
+                                                        <circle cx="11" cy="12.5" r="1.2" fill="currentColor" />
                                                     </svg>
                                                 </div>
-                                                <span className="text-2xl flex-shrink-0">{getFileIcon(activity.type)}</span>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wide text-gray-500">
-                                                        <span>Posição {index + 1}</span>
-                                                        <span>•</span>
-                                                        <span>flashcards</span>
-                                                        <span>•</span>
-                                                        <span className="truncate">{activity.sourceFileName}</span>
-                                                        <span>•</span>
-                                                        <span>{activity.cardCount} cartões</span>
-                                                    </div>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Título do deck"
-                                                        defaultValue={activity.title}
-                                                        onBlur={(e) => handleUpdateFlashcardTitle(activity, e.target.value)}
-                                                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                                                    />
-                                                </div>
+                                                <span className="text-[10px] font-bold text-gray-400">{index + 1}</span>
                                             </div>
-                                            <div className="flex items-center gap-3 flex-shrink-0">
-                                                <div className="px-3 py-1.5 bg-white border border-gray-300 rounded text-gray-600 text-sm">
-                                                    {activity.cards[0] ? `${activity.cards[0].front.slice(0, 40)}${activity.cards[0].front.length > 40 ? "..." : ""}` : "Sem preview"}
+
+                                            {/* Column 2: Content */}
+                                            <div className="min-w-0 space-y-2">
+                                                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-gray-500">
+                                                    <span className="text-lg leading-none">{getFileIcon(activity.type)}</span>
+                                                    <span className="font-medium">flashcards</span>
+                                                    <span>•</span>
+                                                    <span className="truncate">{activity.sourceFileName}</span>
+                                                    <span>•</span>
+                                                    <span className="flex-shrink-0">{activity.cardCount} cartões</span>
                                                 </div>
-                                                <button
-                                                    onClick={() => handleDeleteFlashcardActivity(activity)}
-                                                    disabled={deleting === activity.id}
-                                                    className="px-3 py-1.5 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 hover:border-red-200 text-sm font-medium transition-colors disabled:opacity-50"
-                                                >
-                                                    {deleting === activity.id ? "..." : "Apagar"}
-                                                </button>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Título do deck"
+                                                    defaultValue={activity.title}
+                                                    onBlur={(e) => handleUpdateFlashcardTitle(activity, e.target.value)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                    draggable={false}
+                                                    className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-text"
+                                                />
+                                                <div className="flex items-center gap-2 justify-end flex-wrap">
+                                                    <span className="text-xs text-gray-400 truncate max-w-[200px] mr-auto">
+                                                        {activity.cards[0] ? `${activity.cards[0].front.slice(0, 30)}${activity.cards[0].front.length > 30 ? "…" : ""}` : "Sem preview"}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleDeleteFlashcardActivity(activity)}
+                                                        disabled={deleting === activity.id}
+                                                        draggable={false}
+                                                        className="px-3 py-1 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 hover:border-red-200 text-xs font-medium transition-colors disabled:opacity-50"
+                                                    >
+                                                        {deleting === activity.id ? "..." : "Apagar"}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     );
