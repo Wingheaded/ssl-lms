@@ -183,17 +183,68 @@ export default function TrainingDetailPage() {
     };
 
     const getYouTubeEmbed = (url: string) => {
+        const applyPlayerParams = (embedUrl: URL) => {
+            embedUrl.searchParams.set("rel", "0");
+            embedUrl.searchParams.set("playsinline", "1");
+            return embedUrl.toString();
+        };
+
+        try {
+            const parsedUrl = new URL(url);
+            const hostname = parsedUrl.hostname.replace(/^www\./, "");
+            const pathSegments = parsedUrl.pathname.split("/").filter(Boolean);
+            const buildEmbedUrl = (videoId: string) => {
+                const embedUrl = new URL(`https://www.youtube.com/embed/${videoId}`);
+
+                parsedUrl.searchParams.forEach((value, key) => {
+                    if (key !== "v") {
+                        embedUrl.searchParams.set(key, value);
+                    }
+                });
+
+                if (!embedUrl.searchParams.has("start") && parsedUrl.searchParams.has("t")) {
+                    embedUrl.searchParams.set("start", parsedUrl.searchParams.get("t") || "");
+                    embedUrl.searchParams.delete("t");
+                }
+
+                return applyPlayerParams(embedUrl);
+            };
+
+            if (hostname === "youtu.be" && pathSegments[0]) {
+                return buildEmbedUrl(pathSegments[0]);
+            }
+
+            if (hostname.endsWith("youtube.com")) {
+                if (pathSegments[0] === "embed" && pathSegments[1]) {
+                    return applyPlayerParams(parsedUrl);
+                }
+
+                if (pathSegments[0] === "watch") {
+                    const videoId = parsedUrl.searchParams.get("v");
+                    if (videoId) {
+                        return buildEmbedUrl(videoId);
+                    }
+                }
+
+                if (pathSegments[0] === "shorts" && pathSegments[1]) {
+                    return buildEmbedUrl(pathSegments[1]);
+                }
+            }
+        } catch {
+            // Fall back to the original string parsing for malformed URLs already stored in Firestore.
+        }
+
         if (url.includes("embed")) {
-            return url;
+            return `${url}${url.includes("?") ? "&" : "?"}rel=0&playsinline=1`;
         }
 
         const videoId = url.split("v=")[1];
         if (videoId) {
-            return `https://www.youtube.com/embed/${videoId.split("&")[0]}`;
+            return `https://www.youtube.com/embed/${videoId.split("&")[0]}?rel=0&playsinline=1`;
         }
 
         if (url.includes("youtu.be")) {
-            return `https://www.youtube.com/embed/${url.split("/").pop()}`;
+            return `https://www.youtube.com/embed/${url.split("/").pop()}?rel=0&playsinline=1`;
         }
 
         return url;

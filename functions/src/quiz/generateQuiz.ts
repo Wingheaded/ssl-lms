@@ -1,4 +1,4 @@
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { GoogleGenAI } from "@google/genai";
@@ -386,7 +386,7 @@ OUTPUT FORMAT (JSON only, no markdown):
  * Accepts: { trainingId: string }
  * Returns: { sessionId: string, questions: QuizQuestion[] (without correctAnswer) }
  */
-export const generateQuiz = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request) => {
+export const generateQuiz = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request: CallableRequest<any>) => {
     // Auth check
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "User must be logged in.");
@@ -458,7 +458,7 @@ export const generateQuiz = onCall({ secrets: ["GEMINI_API_KEY"] }, async (reque
     }
 });
 
-export const previewQuiz = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request) => {
+export const previewQuiz = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request: CallableRequest<any>) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "User must be logged in.");
     }

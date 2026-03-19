@@ -23,6 +23,9 @@ jobs:
       - name: Install Dependencies
         run: cd lms-web && npm ci
 
+      - name: Install Functions Dependencies
+        run: cd functions && npm ci
+
       - name: Build
         run: cd lms-web && npm run build
 

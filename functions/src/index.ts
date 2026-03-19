@@ -1,5 +1,5 @@
 import { setGlobalOptions } from "firebase-functions";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 
@@ -134,7 +134,7 @@ async function deleteTrainingArtifacts(trainingId: string): Promise<TrainingClea
  * 
  * Returns: { score, passed }
  */
-export const submitQuiz = onCall(async (request) => {
+export const submitQuiz = onCall(async (request: CallableRequest<any>) => {
     // Auth check
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "User must be logged in.");
@@ -279,7 +279,7 @@ export const submitQuiz = onCall(async (request) => {
  *
  * Returns: { isCorrect, correctIndices | correctAnswerIds }
  */
-export const checkAnswer = onCall(async (request) => {
+export const checkAnswer = onCall(async (request: CallableRequest<any>) => {
     try {
         if (!request.auth) {
             throw new HttpsError("unauthenticated", "User must be logged in.");
@@ -393,7 +393,7 @@ export const checkAnswer = onCall(async (request) => {
  * Only callable by existing admins
  * Accepts: { email: string, isAdmin: boolean }
  */
-export const setAdminClaim = onCall(async (request) => {
+export const setAdminClaim = onCall(async (request: CallableRequest<any>) => {
     // Auth check
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "User must be logged in.");
@@ -428,7 +428,7 @@ export const setAdminClaim = onCall(async (request) => {
     }
 });
 
-export const deleteTrainingCascade = onCall(async (request) => {
+export const deleteTrainingCascade = onCall(async (request: CallableRequest<any>) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "User must be logged in.");
     }
@@ -456,7 +456,7 @@ export const deleteTrainingCascade = onCall(async (request) => {
     }
 });
 
-export const cleanupOrphanedTrainingData = onCall(async (request) => {
+export const cleanupOrphanedTrainingData = onCall(async (request: CallableRequest<any>) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "User must be logged in.");
     }

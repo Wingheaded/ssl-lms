@@ -1,4 +1,4 @@
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { YoutubeTranscript } from "youtube-transcript";
@@ -11,7 +11,7 @@ const db = admin.firestore();
  * Accepts: { trainingId: string }
  * Returns: { success: true, transcriptLength: number }
  */
-export const extractTranscript = onCall(async (request) => {
+export const extractTranscript = onCall(async (request: CallableRequest<any>) => {
     // Auth check - Admin only for now as it's an admin feature
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "User must be logged in.");
